@@ -3,7 +3,7 @@
 The ZSH config I use at work and at home. 
 
 The Random Colors are not to everyone's taste, I like it to tell the difference between different shells I have open. 
-Sometimes you get a bad color, that can be fixed by running `reload` to re-source hte rc file and reload the prompt.
+Sometimes you get a bad color, that can be fixed by running `reload` to re-source the rc file and reload the prompt.
 
 Requirements and troubleshooting tips can be found in the file so you don't need to jump between your browser and terminal to fix things.
 
