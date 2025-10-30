@@ -2,6 +2,8 @@
 
 The ZSH config I use at work and at home. 
 
+<img width="1509" height="121" alt="image" src="https://github.com/user-attachments/assets/1a259c60-3e47-4676-83dd-a82291b471d2" />
+
 The Random Colors are not to everyone's taste, I like it to tell the difference between different shells I have open. 
 Sometimes you get a bad color, that can be fixed by running `reload` to re-source the rc file and reload the prompt.
 
