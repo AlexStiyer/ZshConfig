@@ -1,8 +1,8 @@
 ### Alex's 'Wombo Theme' for Zsh ##########################
 # Requirements:
-# - Zsh,
-# - a Nerd Font (I use HackFont)
-# - Zap plugin manager
+# - Zsh
+# - A Nerd Font (I like https://www.programmingfonts.org/#hack)
+# - Zap Plugin Manager (https://github.com/zap-zsh)
 #
 # Git Configs:
 #   For a fast git prompt, I recommend caching the untracked-file scan:
