@@ -1,98 +1,159 @@
-### Alex's 'Wombo Theme' for Zsh  ########################
+### Alex's 'Wombo Theme' for Zsh ##########################
 # Requirements:
 # - Zsh
 # - A Nerd Font (I like https://www.programmingfonts.org/#hack)
 # - Zap Plugin Manager (https://github.com/zap-zsh)
-
-# Symbol Glossary
-# ◁ - Unstaged Changes in Repo
-# ▶ - Staged Changes in Repo
-# ! - Untracked Files in Repo
-# 
-# Troubleshooting:
 #
-# Q: My Directory Text Looks Weird
-# A: Terminal must treat ANCI bold as bold and not "bright" for best experience.
-#    If this is not possible, remove the %B and %b from the PS1 string
-########################################################### 
+# Git Configs:
+#   For a fast git prompt, I recommend caching the untracked-file scan:
+#     git config --global core.untrackedCache true
+#
+# Git prompt (right side):
+#   ◁  = unstaged changes
+#   ▶  = staged changes
+#   !  = untracked files
+#   +N = commits ahead of upstream
+#   -N = commits behind upstream
+############################################################
 
-##Options
-setopt prompt_subst
+### Plugins
+# supercharge already runs compinit and sets history/completion options.
+# syntax-highlighting must load before history-substring-search.
+[[ -f "${XDG_DATA_HOME:-$HOME/.local/share}/zap/zap.zsh" ]] &&
+    source "${XDG_DATA_HOME:-$HOME/.local/share}/zap/zap.zsh"
 
-### Zap Plugins
-[ -f "${XDG_DATA_HOME:-$HOME/.local/share}/zap/zap.zsh" ] && source "${XDG_DATA_HOME:-$HOME/.local/share}/zap/zap.zsh"
 plug "zsh-users/zsh-autosuggestions"
 plug "zap-zsh/supercharge"
 plug "zsh-users/zsh-syntax-highlighting"
 plug "zsh-users/zsh-history-substring-search"
 
-### Load and initialise completion system
-autoload -Uz compinit
-compinit
+### Options
+setopt prompt_subst
+export ZSHRC=~/.zshrc    # used by supercharge's Ctrl-X reload binding
 
-### Keybinds
+### Keybinds (both normal and application cursor-key modes)
 bindkey '^[[A' history-substring-search-up
+bindkey '^[OA' history-substring-search-up
 bindkey '^[[B' history-substring-search-down
+bindkey '^[OB' history-substring-search-down
 
-### Alias
+### Aliases
 alias reload='source ~/.zshrc'
 alias gs='cd ~/src'
 
-### Prompt
-# Using vcs_info but specifically check-for-changes may slow down prompt in very large repos. 
-# If you experience this consider disabling this for specific directories
-autoload -Uz vcs_info
-zstyle ':vcs_info:*' check-for-changes true
-zstyle ':vcs_info:*' unstagedstr '◁'
-zstyle ':vcs_info:*' stagedstr '▶'
-zstyle ':vcs_info:*' actionformats '%u%c %R/(%a|%m)%S%'
-zstyle ':vcs_info:*' formats '%m %u%c %b'
-zstyle ':vcs_info:git*+set-message:*' hooks git-untracked git-st
 
-# Show special the marker if there are any untracked files in repo append to vcs_info %c token
-+vi-git-untracked(){
-    if [[ $(git rev-parse --is-inside-work-tree 2> /dev/null) == 'true' ]] && \
-        git status --porcelain | grep -q '^?? ' 2> /dev/null ; then
-        hook_com[staged]+='!'
+############################################################
+# Git Prompt
+############################################################
+
+# Parses `git status --porcelain=v2 --branch` on stdin into GIT_PROMPT,
+# e.g. "master", "◁ master", "◁▶! +3/-1 master".
+git_prompt_parse() {
+    GIT_PROMPT=""
+
+    local line xy branch symbols ahead_behind
+    local -i staged=0 unstaged=0 untracked=0 ahead=0 behind=0
+
+    while IFS= read -r line; do
+        case $line in
+            '# branch.head '*)
+                branch=${line#'# branch.head '}
+                ;;
+            '# branch.ab '*)
+                [[ $line =~ '\+([0-9]+) -([0-9]+)$' ]] &&
+                    ahead=$match[1] behind=$match[2]
+                ;;
+            # Ordinary (1) or rename/copy (2): XY = index/worktree state
+            [12]' '*)
+                xy=${line[3,4]}
+                [[ $xy[1] != . ]] && staged=1
+                [[ $xy[2] != . ]] && unstaged=1
+                ;;
+            'u '*)  staged=1 unstaged=1 ;;
+            '? '*)  untracked=1 ;;
+        esac
+    done
+
+    # Not inside a Git worktree.
+    [[ -z $branch ]] && return
+
+    (( unstaged ))  && symbols+='◁'
+    (( staged ))    && symbols+='▶'
+    (( untracked )) && symbols+='!'
+
+    (( ahead ))  && ahead_behind="+$ahead"
+    (( behind )) && ahead_behind+="${ahead_behind:+/}-$behind"
+
+    GIT_PROMPT="${symbols:+$symbols }${ahead_behind:+$ahead_behind }$branch"
+}
+
+# The prompt draws immediately; git status runs in the background and
+# git_prompt_done redraws the prompt once its output is ready (zle -F).
+typeset -g GIT_PROMPT_FD GIT_PROMPT_DIR
+
+git_prompt_start() {
+    # Cancel a job still running from the previous prompt.
+    if [[ -n $GIT_PROMPT_FD ]]; then
+        zle -F $GIT_PROMPT_FD
+        exec {GIT_PROMPT_FD}<&-
+        GIT_PROMPT_FD=
     fi
+
+    # New directory: don't show the previous repo's status while waiting.
+    [[ $PWD != $GIT_PROMPT_DIR ]] && GIT_PROMPT="" GIT_PROMPT_DIR=$PWD
+
+    # Skip spawning git when no .git exists up the tree (unless $GIT_DIR is set).
+    local dir=$PWD
+    while [[ -z $GIT_DIR && ! -e $dir/.git ]]; do
+        [[ $dir == / ]] && { GIT_PROMPT=""; return }
+        dir=${dir:h}
+    done
+
+    exec {GIT_PROMPT_FD}< <(git --no-optional-locks status --porcelain=v2 --branch 2>/dev/null)
+    zle -F -w $GIT_PROMPT_FD git_prompt_done
 }
 
-# Get the number of commits ahead and behind current branch is to HEAD append to vcs_info %m token
-function +vi-git-st() {
-    local ahead behind
-    local -a gitstatus
+git_prompt_done() {
+    zle -F $GIT_PROMPT_FD
+    git_prompt_parse <&$GIT_PROMPT_FD
+    exec {GIT_PROMPT_FD}<&-
+    GIT_PROMPT_FD=
+    wombo_rprompt
+    zle reset-prompt
+}
+zle -N git_prompt_done
 
-    # Exit early in case the worktree is on a detached HEAD
-    git rev-parse ${hook_com[branch]}@{upstream} >/dev/null 2>&1 || return 0
 
-    local -a ahead_and_behind=(
-        $(git rev-list --left-right --count HEAD...${hook_com[branch]}@{upstream} 2>/dev/null)
-    )
+############################################################
+# Prompt
+############################################################
 
-    ahead=${ahead_and_behind[1]}
-    behind=${ahead_and_behind[2]}
+PS_COLOR=$(( 17 + RANDOM % 215 ))    # 17-231: skips black and the grey ramp
+RIGHT_ARROW=$''
 
-    (( $ahead )) && gitstatus+=( "+${ahead}" )
-    (( $behind )) && gitstatus+=( "-${behind}" )
+THN="%F{$PS_COLOR}%K{black}"
+FAT="%F{black}%K{$PS_COLOR}"
 
-    hook_com[misc]+=${(j:/:)gitstatus}
+PS1='${THN} ${BATTERY}%% ${FAT}${RIGHT_ARROW} %B%2~%b ${THN}%k${RIGHT_ARROW}%f '
+
+zmodload zsh/datetime
+typeset -i BATTERY_CHECKED=0
+
+wombo_precmd() {
+    # Battery level changes slowly; refresh at most once a minute.
+    if (( EPOCHSECONDS - BATTERY_CHECKED >= 60 )); then
+        [[ $(pmset -g batt) =~ '([0-9]+)%' ]] && BATTERY=$match[1]
+        BATTERY_CHECKED=$EPOCHSECONDS
+    fi
+
+    git_prompt_start
+    wombo_rprompt
 }
 
-# Run VCS info every time the prompt is created
-precmd() { vcs_info }
-
-# Only verified on Mac, Possible in Linux, Good luck in Windows
-get_battery(){
-    echo $(pmset -g batt | grep -Eo "\d+%" | cut -d% -f1)
+wombo_rprompt() {
+    RPROMPT="%F{white}%*%f"
+    [[ -n $GIT_PROMPT ]] && RPROMPT="%F{magenta}$GIT_PROMPT  $RPROMPT"
 }
 
-# Using Random Color for fun, set a static color here to prevent behaviour
-PS_COLOR=$((1 + $RANDOM % 255))
-RIGHT_ARROW=$'\uE0B0'
-THN=$(echo "%F{$PS_COLOR}%K{black}")
-FAT=$(echo "%F{black}%K{$PS_COLOR}")
-REST='%K{reset_color}'
-PS1=$'${THN} $(get_battery)%% ${FAT}${RIGHT_ARROW} %B%2~%b ${THN}${REST}${RIGHT_ARROW}${REST} '
-RPROMPT=$'%F{magenta}${vcs_info_msg_0_}  %F{white}%*'
-
-### Exports
+autoload -Uz add-zsh-hook
+add-zsh-hook precmd wombo_precmd
