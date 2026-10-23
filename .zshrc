@@ -51,11 +51,14 @@ alias gs='cd ~/src'
 git_prompt_parse() {
     GIT_PROMPT=""
 
-    local line xy branch symbols ahead_behind
+    local line xy oid branch symbols ahead_behind
     local -i staged=0 unstaged=0 untracked=0 ahead=0 behind=0
 
     while IFS= read -r line; do
         case $line in
+            '# branch.oid '*)
+                oid=${line#'# branch.oid '}
+                ;;
             '# branch.head '*)
                 branch=${line#'# branch.head '}
                 ;;
@@ -76,6 +79,9 @@ git_prompt_parse() {
 
     # Not inside a Git worktree.
     [[ -z $branch ]] && return
+
+    # Detached HEAD: show the short commit hash instead of "(detached)".
+    [[ $branch == '(detached)' ]] && branch=${oid[1,7]}
 
     (( unstaged ))  && symbols+='◁'
     (( staged ))    && symbols+='▶'
@@ -131,10 +137,14 @@ zle -N git_prompt_done
 PS_COLOR=$(( 17 + RANDOM % 215 ))    # 17-231: skips black and the grey ramp
 RIGHT_ARROW=$''
 
-THN="%F{$PS_COLOR}%K{black}"
-FAT="%F{black}%K{$PS_COLOR}"
+THN="%F{$PS_COLOR}%k"
+FAT="%F{16}%K{$PS_COLOR}"
 
-PS1='${THN} ${BATTERY}%% ${FAT}${RIGHT_ARROW} %B%2~%b ${THN}%k${RIGHT_ARROW}%f '
+# The battery segment sits on the terminal's own background. A terminal can't
+# use "default background" as a text color, so the first arrow is drawn in
+# reverse video (%S): its triangle takes the default background and the rest
+# of the cell takes $PS_COLOR.
+PS1='${THN} ${BATTERY}%% %S${RIGHT_ARROW}%s${FAT} %B%2~%b ${THN}${RIGHT_ARROW}%f '
 
 zmodload zsh/datetime
 typeset -i BATTERY_CHECKED=0
@@ -151,9 +161,13 @@ wombo_precmd() {
 }
 
 wombo_rprompt() {
-    RPROMPT="%F{white}%*%f"
-    [[ -n $GIT_PROMPT ]] && RPROMPT="%F{magenta}$GIT_PROMPT  $RPROMPT"
+    # Single quotes keep the branch name out of the prompt text itself, so
+    # prompt_subst never evaluates it: a branch like "$(cmd)" would otherwise
+    # run on every redraw. "%" is doubled so it can't act as a prompt escape.
+    RPROMPT='%F{white}%*%f'
+    [[ -n $GIT_PROMPT ]] && RPROMPT='%F{magenta}${GIT_PROMPT//\%/%%}  '$RPROMPT
 }
 
 autoload -Uz add-zsh-hook
 add-zsh-hook precmd wombo_precmd
+
