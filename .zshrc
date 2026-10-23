@@ -140,10 +140,6 @@ RIGHT_ARROW=$''
 THN="%F{$PS_COLOR}%k"
 FAT="%F{16}%K{$PS_COLOR}"
 
-# The battery segment sits on the terminal's own background. A terminal can't
-# use "default background" as a text color, so the first arrow is drawn in
-# reverse video (%S): its triangle takes the default background and the rest
-# of the cell takes $PS_COLOR.
 PS1='${THN} ${BATTERY}%% %S${RIGHT_ARROW}%s${FAT} %B%2~%b ${THN}${RIGHT_ARROW}%f '
 
 zmodload zsh/datetime
