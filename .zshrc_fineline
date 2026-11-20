@@ -1,0 +1,213 @@
+############################################################
+# Alex's "Fineline theme" for Zsh
+#
+# Requirements:
+#   - Zap plugin manager (https://github.com/zap-zsh)
+#   - For a fast git prompt: git config --global core.untrackedCache true
+#
+# Prompt:
+#   ╷ user | 85% | ~/src | main ◁▶!
+#   └─                                    12:34:56
+#
+#   user   username last command succeeded (yellow) or failed (red)
+#   +N/-N  commits ahead of / behind upstream
+#   ◁ ▶ !  unstaged changes, staged changes, untracked files
+############################################################
+
+
+### Theme Settings
+
+# Any zsh color works: a name (white), 0-255, or hex (#b1b9f9).
+FINELINE_SUCCESS_COLOR="#ffd75f"    # yellow
+FINELINE_FAIL_COLOR="#d75f5f"       # red
+FINELINE_BATTERY_COLOR="#4eba65"    # green
+FINELINE_DIR_COLOR="#b48cff"        # purple
+FINELINE_GIT_COLOR="#b1b9f9"        # blue
+FINELINE_GIT_SYMBOLS_COLOR="#f5e6a3"    # pale yellow
+FINELINE_CLOCK_COLOR="#999999"      # gray
+
+
+### Plugins
+# supercharge runs compinit and sets history/completion options.
+# syntax-highlighting must load before history-substring-search.
+
+[[ -f "${XDG_DATA_HOME:-$HOME/.local/share}/zap/zap.zsh" ]] &&
+    source "${XDG_DATA_HOME:-$HOME/.local/share}/zap/zap.zsh"
+
+plug "zsh-users/zsh-autosuggestions"
+plug "zap-zsh/supercharge"
+plug "zsh-users/zsh-syntax-highlighting"
+plug "zsh-users/zsh-history-substring-search"
+
+
+### Options and keybinds
+
+setopt prompt_subst
+export ZSHRC=~/.zshrc    # used by supercharge's Ctrl-X reload
+
+# Up/down search history (normal and application cursor-key modes)
+bindkey '^[[A' history-substring-search-up
+bindkey '^[OA' history-substring-search-up
+bindkey '^[[B' history-substring-search-down
+bindkey '^[OB' history-substring-search-down
+
+
+### Aliases and directories
+
+alias reload='source ~/.zshrc'
+alias gs='cd ~/src'
+
+# `src circula/ironbank` -> cd ~/src/circula/ironbank, with tab completion
+src()  { cd ~/src/${1:-} }
+_src() { _files -W ~/src -/ }
+compdef _src src
+
+hash -d src=~/src    # ~src works in any command
+
+
+############################################################
+# Git status
+#
+# git runs in the background so the prompt draws immediately;
+# the prompt redraws once its output arrives. Sets:
+#   GIT_PROMPT   "+3/-1 main"
+#   GIT_SYMBOLS  "◁▶!"
+############################################################
+
+typeset -g GIT_PROMPT GIT_SYMBOLS GIT_PROMPT_FD GIT_PROMPT_DIR
+
+git_prompt_clear() {
+    GIT_PROMPT="" GIT_SYMBOLS=""
+}
+
+# Reads `git status --porcelain=v2 --branch` output.
+git_prompt_parse() {
+    git_prompt_clear
+
+    local line oid branch ahead_behind
+    local -i staged=0 unstaged=0 untracked=0 ahead=0 behind=0
+
+    while IFS= read -r line; do
+        case $line in
+            '# branch.oid '*)  oid=${line#'# branch.oid '} ;;
+            '# branch.head '*) branch=${line#'# branch.head '} ;;
+            '# branch.ab '*)
+                [[ $line =~ '\+([0-9]+) -([0-9]+)$' ]] && ahead=$match[1] behind=$match[2]
+                ;;
+            [12]' '*)    # changed file: characters 3-4 are the index/worktree state
+                [[ ${line[3]} != . ]] && staged=1
+                [[ ${line[4]} != . ]] && unstaged=1
+                ;;
+            'u '*) staged=1 unstaged=1 ;;
+            '? '*) untracked=1 ;;
+        esac
+    done
+
+    [[ -z $branch ]] && return    # not in a repo
+    [[ $branch == '(detached)' ]] && branch=${oid[1,7]}
+
+    (( ahead ))  && ahead_behind="+$ahead"
+    (( behind )) && ahead_behind+="${ahead_behind:+/}-$behind"
+    GIT_PROMPT="${ahead_behind:+$ahead_behind }$branch"
+
+    (( unstaged ))  && GIT_SYMBOLS+='◁'
+    (( staged ))    && GIT_SYMBOLS+='▶'
+    (( untracked )) && GIT_SYMBOLS+='!'
+}
+
+git_prompt_start() {
+    # Cancel a job still running from the previous prompt.
+    if [[ -n $GIT_PROMPT_FD ]]; then
+        zle -F $GIT_PROMPT_FD
+        exec {GIT_PROMPT_FD}<&-
+        GIT_PROMPT_FD=
+    fi
+
+    # Don't show the previous repo's status while waiting.
+    if [[ $PWD != $GIT_PROMPT_DIR ]]; then
+        git_prompt_clear
+        GIT_PROMPT_DIR=$PWD
+    fi
+
+    # Only run git when there's a .git somewhere up the tree.
+    local dir=$PWD
+    while [[ -z $GIT_DIR && ! -e $dir/.git ]]; do
+        [[ $dir == / ]] && { git_prompt_clear; return }
+        dir=${dir:h}
+    done
+
+    exec {GIT_PROMPT_FD}< <(git --no-optional-locks status --porcelain=v2 --branch 2>/dev/null)
+    zle -F -w $GIT_PROMPT_FD git_prompt_done
+}
+
+git_prompt_done() {
+    zle -F $GIT_PROMPT_FD
+    git_prompt_parse <&$GIT_PROMPT_FD
+    exec {GIT_PROMPT_FD}<&-
+    GIT_PROMPT_FD=
+    fineline_prompt
+    zle reset-prompt
+}
+zle -N git_prompt_done
+
+
+############################################################
+# Prompt
+############################################################
+
+zmodload zsh/datetime
+typeset -i BATTERY_CHECKED=0
+
+fineline_precmd() {
+    # Battery changes slowly; check at most once a minute.
+    if (( EPOCHSECONDS - BATTERY_CHECKED >= 60 )); then
+        [[ $(pmset -g batt) =~ '([0-9]+)%' ]] && BATTERY=$match[1]
+        BATTERY_CHECKED=$EPOCHSECONDS
+    fi
+
+    git_prompt_start
+    fineline_prompt
+}
+
+fineline_prompt() {
+    # The branch name stays a variable reference so prompt_subst never runs
+    # it as code (a branch could be named "$(cmd)"); "%" is escaped.
+    local branch='${GIT_PROMPT//\%/%%}'
+
+    local sep="%F{8} | %f"
+
+    PS1="%F{8}╷%f "
+    PS1+="%(?.%F{$FINELINE_SUCCESS_COLOR}.%F{$FINELINE_FAIL_COLOR})%B%n%b%f$sep"
+    PS1+="%F{$FINELINE_BATTERY_COLOR}"'${BATTERY}%%'"%f$sep"
+    PS1+="%F{$FINELINE_DIR_COLOR}%B%2~%b%f"
+    [[ -n $GIT_PROMPT ]]  && PS1+="$sep%F{$FINELINE_GIT_COLOR}$branch%f"
+    [[ -n $GIT_SYMBOLS ]] && PS1+=" %F{$FINELINE_GIT_SYMBOLS_COLOR}$GIT_SYMBOLS%f"
+
+    PS1+=$'\n'"%F{8}└─%f "
+    RPROMPT="%F{$FINELINE_CLOCK_COLOR}"'%*%f'
+}
+
+autoload -Uz add-zsh-hook
+add-zsh-hook precmd fineline_precmd
+
+# Refresh the prompt when the terminal window regains focus. Focus
+# reporting is only on at the prompt, so other programs never see it.
+focus_reporting_on()  { printf '\e[?1004h' }
+focus_reporting_off() { printf '\e[?1004l' }
+add-zsh-hook precmd  focus_reporting_on
+add-zsh-hook preexec focus_reporting_off
+
+fineline_focus_in() {
+    fineline_precmd
+    zle reset-prompt
+}
+zle -N fineline_focus_in
+bindkey '\e[I' fineline_focus_in    # focus gained
+bindkey '\e[O' redisplay         # focus lost: nothing to do
+
+
+### Homebrew
+export PATH="/opt/homebrew/bin:$PATH"
+
+### Personio
+[[ -f ~/.zshrc_personio ]] && source ~/.zshrc_personio
