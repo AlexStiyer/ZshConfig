@@ -20,7 +20,7 @@ Copy + Paste the contents of `.zshrc_fineline` or `.zshrc_wombo` into your `.zsh
    - Search History Keybinds
    
 
-## Themes** 
+## Themes
 #### Fineline
 <img width="748" height="141" alt="image" src="https://github.com/user-attachments/assets/d1bb5726-8f24-4acf-9892-9fa0b08058b9" />
 
