@@ -1,15 +1,32 @@
 # Zsh Config
 
-The ZSH config I use at work and at home. 
-
-<img width="1509" height="121" alt="image" src="https://github.com/user-attachments/assets/1a259c60-3e47-4676-83dd-a82291b471d2" />
-
-**Why I use this:**
-- Zap Plugin Manager is light weight and more ergonomic than OMZ
-- Single File Configuration so I don't get lost in directories when I make my bi-annual changes
-- "Wombo" Prompt Provides Basic Git Information at a glance and displays Battery Life for a nerd flex
+The ZSH configs I use at work and at home. I use ZAP plugin manager because its simpler and lighter than OMZ. I keep each "theme" as a single file so you don't need to remember any arcane directories to configure it.
 
 Requirements and troubleshooting tips can be found in the file so you don't need to jump between your browser and terminal to fix things.
 
-The Random Colors are not to everyone's taste, I like it to tell the difference between different shells I have open. 
-Sometimes you get a bad color, that can be fixed by running `reload` to re-source the rc file and reload the prompt.
+**How to use:**
+
+Copy + Paste the contents of `.zshrc_fineline` or `.zshrc_wombo` into your `.zshrc`
+
+**Why**
+- Zap Plugin Manager is light weight and more ergonomic than OMZ
+- Single File Configuration so I don't get lost in directories
+
+**What's included?**
+   - Async git status using zle callbacks and process substitution
+   - Stale prompt update when window is re-focused (only supported in terminals which send key code on focus in/out_
+   - Git Porcelain Parser (with a symbol bar)
+   - Mac OS Battery Level
+   - Search History Keybinds
+   
+
+## Themes** 
+#### Fineline
+<img width="748" height="141" alt="image" src="https://github.com/user-attachments/assets/d1bb5726-8f24-4acf-9892-9fa0b08058b9" />
+
+#### Wombo
+<img width="811" height="140" alt="image" src="https://github.com/user-attachments/assets/80ce18f4-5f93-4d6a-a78d-5dc4809c5389" />
+
+
+
+
