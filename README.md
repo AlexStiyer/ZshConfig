@@ -14,7 +14,7 @@ Copy + Paste the contents of `.zshrc_fineline` or `.zshrc_wombo` into your `.zsh
 
 **What's included?**
    - Async git status using zle callbacks and process substitution
-   - Stale prompt update when window is re-focused (only supported in terminals which send key code on focus in/out_
+   - Stale prompt update when window is re-focused (only supported in terminals which send key code on focus in/out)
    - Git Porcelain Parser (with a symbol bar)
    - Mac OS Battery Level
    - Search History Keybinds
