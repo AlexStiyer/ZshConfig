@@ -167,3 +167,17 @@ wombo_rprompt() {
 autoload -Uz add-zsh-hook
 add-zsh-hook precmd wombo_precmd
 
+# Refresh the prompt on regains focus. 
+focus_reporting_on()  { printf '\e[?1004h' }
+focus_reporting_off() { printf '\e[?1004l' }
+add-zsh-hook precmd  focus_reporting_on
+add-zsh-hook preexec focus_reporting_off
+
+wombo_focus_in() {
+    wombo_precmd       # git status finishes in the background and redraws again
+    zle reset-prompt
+}
+zle -N wombo_focus_in
+bindkey '\e[I' wombo_focus_in
+bindkey '\e[O' redisplay    # focus lost: no-op
+
