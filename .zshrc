@@ -167,7 +167,7 @@ wombo_rprompt() {
 autoload -Uz add-zsh-hook
 add-zsh-hook precmd wombo_precmd
 
-# Refresh the prompt on regains focus. 
+# Refresh the prompt when focus is regained for Terminals that support it
 focus_reporting_on()  { printf '\e[?1004h' }
 focus_reporting_off() { printf '\e[?1004l' }
 add-zsh-hook precmd  focus_reporting_on
